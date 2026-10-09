@@ -1,3 +1,4 @@
+import { apifyReddit } from "@/lib/providers/apify";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -89,6 +90,11 @@ export async function fetchSearch(
     timeframe,
     variant: variantOf({ cursor }),
     run: async () => {
+      if (ctx.funded.provider === "apify") {
+        if (cursor) throw new Error("Apify search is bounded to one result batch.");
+        const result = await apifyReddit({ query, sort, timeframe });
+        return { data: { posts: result.posts, nextCursor: null }, costUsd: result.costUsd, requestId: result.requestId, warning: result.warning };
+      }
       const res = await ctx.funded.client.reddit.search({
         query,
         sort,
@@ -122,6 +128,11 @@ export async function fetchSubredditPosts(
     sort: "new",
     variant: variantOf({ cursor, limit }),
     run: async () => {
+      if (ctx.funded.provider === "apify") {
+        if (cursor) throw new Error("Apify listings are bounded to one result batch.");
+        const result = await apifyReddit({ url: `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/new/` });
+        return { data: { posts: result.posts, nextCursor: null }, costUsd: result.costUsd, requestId: result.requestId, warning: result.warning };
+      }
       const res = await ctx.funded.client.reddit.subredditPosts({
         subreddit,
         sort: "new",
@@ -156,6 +167,10 @@ export async function fetchPost(
     normalizedQuery: redditThread(url)?.postId ?? url,
     maxAgeMs,
     run: async () => {
+      if (ctx.funded.provider === "apify") {
+        const result = await apifyReddit({ url });
+        return { data: { posts: result.posts }, costUsd: result.costUsd, requestId: result.requestId, warning: result.warning };
+      }
       const res = await ctx.funded.client.reddit.post({ url });
       return { data: res.output.found ? { posts: [res.output.data] } : null, costUsd: res.costUsd };
     },
@@ -175,6 +190,10 @@ export async function fetchPostComments(
     sku: "reddit.post_comments",
     normalizedQuery: postId,
     run: async () => {
+      if (ctx.funded.provider === "apify") {
+        const result = await apifyReddit({ url, comments: true });
+        return { data: { comments: result.comments }, costUsd: result.costUsd, requestId: result.requestId, warning: result.warning };
+      }
       const res = await ctx.funded.client.reddit.postComments({ url });
       return { data: res.output.found ? res.output.data : null, costUsd: res.costUsd };
     },
@@ -207,6 +226,7 @@ export async function fetchSubredditDetails(
     sku: "reddit.subreddit_details",
     normalizedQuery: normalizeQuery(subreddit),
     run: async () => {
+      if (ctx.funded.provider === "apify") return { data: null, costUsd: 0 };
       const res = await ctx.funded.client.reddit.subredditDetails({ subreddit });
       return { data: res.output.found ? res.output.data : null, costUsd: res.costUsd };
     },
@@ -321,6 +341,7 @@ export async function fetchAuthorProfile(
     normalizedQuery: key,
     maxAgeMs,
     run: async () => {
+      if (ctx.funded.provider === "apify") return { data: null, costUsd: 0 };
       const res = await ctx.funded.client.run<AvatarOutput>("reddit.avatar", { username });
       return { data: res.output.found ? res.output.data : null, costUsd: res.costUsd };
     },

@@ -1,3 +1,6 @@
+import { reserveProviderSpend, settleProviderSpend } from "../providers/budget";
+import { ApifyRunError } from "../providers/apify";
+import { config } from "../config";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -34,12 +37,12 @@ type SharedFetch<T> = {
   /** Every other effective parameter, canonicalized; see `searchRuns.variant`. */
   variant?: string;
   maxAgeMs?: number;
-  run: () => Promise<{ data: unknown; costUsd: number; nextCursor?: string | null }>;
+  run: () => Promise<{ data: unknown; costUsd: number; nextCursor?: string | null; requestId?: string; warning?: string }>;
   store: (data: unknown, runId: string) => Promise<T>;
   load: (runId: string) => Promise<T>;
 };
 
-export type SharedResult<T> = { value: T; reused: boolean; costUsd: number };
+export type SharedResult<T> = { value: T; reused: boolean; costUsd: number; warning?: string };
 
 type RunKey = {
   kind: FetchKind;
@@ -119,7 +122,8 @@ export async function fetchShared<T>(input: SharedFetch<T>): Promise<SharedResul
   const { ctx, kind, sku, normalizedQuery } = input;
   const sort = input.sort ?? null;
   const timeframe = input.timeframe ?? null;
-  const variant = input.variant ?? "";
+  const provider = input.kind === "serp" && config().DATAFORSEO_LOGIN ? "dataforseo" : ctx.funded.provider;
+  const variant = provider ? variantOf({ provider, original: input.variant ?? "" }) : input.variant ?? "";
   const maxAgeMs = input.maxAgeMs ?? ctx.maxAgeMs;
   const key = { kind, sku, normalizedQuery, sort, timeframe, variant };
 
@@ -152,13 +156,13 @@ export async function fetchShared<T>(input: SharedFetch<T>): Promise<SharedResul
   inFlightRuns.set(flightKey, buying);
   try {
     const bought = await buying;
-    return { value: bought.value, reused: false, costUsd: bought.costUsd };
+    return { value: bought.value, reused: false, costUsd: bought.costUsd, ...(bought.warning ? { warning: bought.warning } : {}) };
   } finally {
     inFlightRuns.delete(flightKey);
   }
 }
 
-type Bought<T> = { id: string; requestId: string | null; value: T; costUsd: number };
+type Bought<T> = { id: string; requestId: string | null; value: T; costUsd: number; warning?: string };
 
 /** The purchases under way in this process, by the key a reuse would match. */
 const inFlightRuns = new Map<string, Promise<Bought<unknown>>>();
@@ -174,9 +178,27 @@ async function buy<T>(input: SharedFetch<T>, key: RunKey): Promise<Bought<T>> {
   if (ctx.funded.funding === "house") {
     await assertHouseDataUnderCap();
   }
-  const { result, requestId } = key.sku.startsWith("reddit.")
-    ? await paced(() => ctx.funded.call(input.run))
-    : await ctx.funded.call(input.run);
+  const settings = config();
+  const provider = key.sku.startsWith("reddit.") && ctx.funded.provider === "apify" ? "apify"
+    : key.sku === "google.search" && (settings.DATAFORSEO_LOGIN || ctx.funded.provider === "apify") ? "dataforseo" : null;
+  const reservation = provider ? await reserveProviderSpend(ctx.projectId, provider,
+    provider === "apify" ? settings.APIFY_MAX_RUN_USD : 0.01) : null;
+  let made;
+  try {
+    made = key.sku.startsWith("reddit.")
+      ? await paced(() => ctx.funded.call(input.run))
+      : await ctx.funded.call(input.run);
+  } catch (error) {
+    if (error instanceof ApifyRunError) {
+      if (reservation) await settleProviderSpend(reservation, error.costUsd);
+      await recordUsage({ projectId: ctx.projectId, sku: key.sku, costUsd: error.costUsd,
+        requestId: error.requestId, searchRunId: null, fundedBy: ctx.funded.funding, reused: false });
+    }
+    throw error;
+  }
+  const { result } = made;
+  if (reservation) await settleProviderSpend(reservation, result.costUsd);
+  const requestId = result.requestId ?? made.requestId;
   const runId = randomUUID();
   await db().insert(searchRuns).values({
     id: runId,
@@ -189,7 +211,7 @@ async function buy<T>(input: SharedFetch<T>, key: RunKey): Promise<Bought<T>> {
   try {
     const value = await input.store(result.data, runId);
     await db().update(searchRuns).set({ completedAt: new Date() }).where(eq(searchRuns.id, runId));
-    return { id: runId, requestId, value, costUsd: result.costUsd };
+    return { id: runId, requestId, value, costUsd: result.costUsd, warning: result.warning };
   } finally {
     await recordUsage({
       projectId: ctx.projectId,

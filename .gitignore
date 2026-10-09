@@ -20,3 +20,7 @@ deploy/
 
 # Conductor machine-local settings, which override the shared ones.
 .conductor/settings.local.toml
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*

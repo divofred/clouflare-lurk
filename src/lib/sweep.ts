@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import type { ProjectActivity } from "@/lib/projectActivity";
 import { candidateSources, jobs } from "@/db/schema";
@@ -58,15 +58,18 @@ export async function sweepStatus(projectId: string): Promise<SweepStatus | null
     const [setup] = job
       ? []
       : await db()
-          .select({ progress: jobs.progress })
+          .select({ progress: jobs.progress, error: jobs.error, finishedAt: jobs.finishedAt })
           .from(jobs)
           .where(
-            and(eq(jobs.projectId, projectId), eq(jobs.kind, "discovery_initial"), isNull(jobs.finishedAt)),
+            and(eq(jobs.projectId, projectId), eq(jobs.kind, "discovery_initial")),
           )
+          .orderBy(desc(jobs.runAt))
           .limit(1);
     if (!job && !setup) {
       return null;
     }
+    if (setup?.error) return { state: "stopped", progress: setup.error, elapsedMs: 0, found: 0, feedLeads: 0 };
+    if (setup?.finishedAt) return null;
     return { state: "waiting", progress: setup?.progress ?? null, elapsedMs: 0, found: 0, feedLeads: 0 };
   }
   const start = job.startedAt;
@@ -79,7 +82,7 @@ export async function sweepStatus(projectId: string): Promise<SweepStatus | null
   ]);
   return {
     state: job.error ? "stopped" : job.finishedAt ? "done" : "running",
-    progress: job.progress,
+    progress: job.error ?? job.progress,
     elapsedMs: (job.finishedAt ?? new Date()).getTime() - start.getTime(),
     found: found.n,
     feedLeads,

@@ -31,6 +31,9 @@ function bearerToken(request: Request): string {
 
 /** Who is calling. Throws the 401 the caller should see when nobody is. */
 export async function authenticate(request: Request): Promise<ApiCaller> {
+  if (config().AGENCY_MODE) {
+    throw new ApiError("unauthorized", "API keys are disabled in the internal agency workspace. Sign in with an approved account.");
+  }
   const key = await findApiKey(bearerToken(request));
   if (!key) {
     throw new ApiError("unauthorized", "That API key is not valid.", {

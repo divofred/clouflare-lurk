@@ -42,3 +42,12 @@ describe("packing candidates into requests", () => {
     expect(stateTokens(title)).toBeGreaterThanOrEqual(Math.ceil(JSON.stringify(title).length / 2.3));
   });
 });
+
+it("does not convert a Cloudflare credit failure into unanswered candidates", async () => {
+  const { askInBatches } = await import("@/lib/scan/batches");
+  const { CloudflareAiError } = await import("@/lib/cloudflareAi");
+  const error = new CloudflareAiError("Insufficient credits");
+  const fallback = vi.fn(() => []);
+  await expect(askInBatches(["post"], 1, async () => { throw error; }, fallback, () => 1)).rejects.toBe(error);
+  expect(fallback).not.toHaveBeenCalled();
+});

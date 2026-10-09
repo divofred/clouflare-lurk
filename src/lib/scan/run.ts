@@ -1,4 +1,5 @@
 import { enqueueJob, writeProgress } from "@/jobs/enqueue";
+import { config } from "@/lib/config";
 import { clientForUser } from "@/lib/anyapi";
 import type { FetchContext } from "@/lib/reddit/fetch";
 import { fetchPost } from "@/lib/reddit/skus";
@@ -47,7 +48,9 @@ export type ScanOutcome = {
 export async function runScan(projectId: string, jobId: string): Promise<ScanOutcome> {
   const project = await requireScanProject(projectId);
   const { limits, settings } = await tierForUser(project.userId);
-  const cadence = cadenceFor(settings.settings.cadence);
+  const cadence = cadenceFor(config().DATA_PROVIDER === "apify"
+    ? { kind: "interval", hours: 24 }
+    : settings.settings.cadence);
   const funded = await clientForUser(project.userId);
   const ctx: FetchContext = {
     projectId,

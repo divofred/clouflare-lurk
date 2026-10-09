@@ -1,3 +1,4 @@
+import { config } from "@/lib/config";
 import Link from "next/link";
 import { ListEditor } from "@/components/product/ListEditor";
 import { ProfileForm } from "@/components/product/ProfileForm";
@@ -129,7 +130,7 @@ export default async function ProductPage({ searchParams }: ProductPageProps) {
           </form>
         )}
         {/* Rebuilding reads the product page again, so a project with no page has nothing to rebuild from. */}
-        {project.url ? (
+        {project.url && config().DATA_PROVIDER !== "apify" ? (
           <>
             <form action={rebuildProfileAction}>
               <input type="hidden" name="projectId" value={project.id} />

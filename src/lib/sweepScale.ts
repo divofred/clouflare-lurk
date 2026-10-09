@@ -6,6 +6,7 @@ import { config } from "@/lib/config";
  * able to shrink.
  */
 export function smallSweep(): boolean {
+  if (config().DATA_PROVIDER === "apify") return true;
   return process.env.NODE_ENV !== "production" && config().SWEEP_SCALE === "small";
 }
 

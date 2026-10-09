@@ -6,6 +6,7 @@ import { enqueueJob } from "@/jobs/enqueue";
 import { kickScheduler } from "@/jobs/scheduler";
 import { errorMessage, failure } from "@/lib/actionResult";
 import { requireLocalUser } from "@/lib/auth";
+import { z } from "zod";
 import { createProject } from "@/lib/projects";
 
 export type NewProjectState = { error: string | null };
@@ -36,23 +37,38 @@ export async function createProjectAndProfileAction(
 ): Promise<NewProjectState> {
   const user = await requireLocalUser();
   const url = String(formData.get("url") ?? "").trim();
-  if (!url) {
-    return { error: "A product URL is needed before we can read your site." };
+  const manual = String(formData.get("name") ?? "").trim();
+  const fields = z.object({
+    name: z.string().trim().min(1).max(120),
+    solution: z.string().trim().min(10).max(4000),
+    pain: z.string().trim().min(5).max(2000),
+    targetUsers: z.string().trim().min(3).max(2000),
+    geography: z.string().trim().max(300),
+  }).safeParse(Object.fromEntries(["name", "solution", "pain", "targetUsers", "geography"].map(
+    (key) => [key, String(formData.get(key) ?? "")],
+  )));
+  if (manual && !fields.success) {
+    return { error: "Enter the client name, services, customer problem, and target customers." };
   }
-  // The field is plain text with the scheme drawn beside it, so the browser
-  // no longer refuses an address that is not one.
-  if (!URL.canParse(url) || !new URL(url).hostname.includes(".")) {
-    return { error: "That does not look like a web address. Try something like yourproduct.com." };
+  if (!manual && !url) {
+    return { error: "Describe your client or enter a product website." };
   }
-  const name = nameFromUrl(url);
+  if (url && (!URL.canParse(url) || !["https:", "http:"].includes(new URL(url).protocol) || !new URL(url).hostname.includes("."))) {
+    return { error: "Enter a valid http or https website address, or leave it blank." };
+  }
+  const name = manual || nameFromUrl(url);
 
   let projectId: string;
   try {
-    const project = await createProject(user.id, name, url);
+    const project = await createProject(user.id, name, url || null, manual && fields.success ? {
+      pain: fields.data.pain, solution: fields.data.solution, targetUsers: fields.data.targetUsers,
+      geography: fields.data.geography, problemPhrasings: [fields.data.pain],
+    } : {});
     if (!project) {
       return { error: "The project could not be created." };
     }
     projectId = project.id;
+
   } catch (error) {
     return failure(error, FALLBACK);
   }

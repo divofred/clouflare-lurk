@@ -1,3 +1,4 @@
+import { manualSearchPhrases, needsSearchPhrases } from "./manualPhrases";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { jobs, projects } from "@/db/schema";
@@ -108,6 +109,13 @@ export async function runInitialDiscovery(
       jobId,
       `${project.name} · ${built.reading.problemPhrasings.length} ways your buyers describe the problem`,
     );
+  }
+  const phrases = parseTextList(project.problemPhrasings);
+  if (project.pain && needsSearchPhrases(phrases, project.pain)) {
+    await progress(jobId, "Writing short searches from the client description");
+    const generated = await manualSearchPhrases(projectId, productFacts(project, []));
+    await db().update(projects).set({ problemPhrasings: generated }).where(eq(projects.id, projectId));
+    project = (await read()) ?? project;
   }
   const { limits, settings } = await tierForUser(project.userId);
 

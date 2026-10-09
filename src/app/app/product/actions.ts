@@ -1,5 +1,7 @@
 "use server";
 
+import { config } from "@/lib/config";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -469,6 +471,7 @@ export async function rebuildProfileAction(formData: FormData) {
   const { user, project } = await requireOwnedProject(
     String(formData.get("projectId") ?? ""),
   );
+  if (config().DATA_PROVIDER === "apify") throw new Error("Edit this client profile manually in the Reddit pilot.");
   if (!project.url) {
     throw new Error("This project has no product URL to read.");
   }

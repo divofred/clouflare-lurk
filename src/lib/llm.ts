@@ -1,6 +1,7 @@
+import { runCloudflareAi } from "./cloudflareAi";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { NoObjectGeneratedError, TypeValidationError, generateObject } from "ai";
-import type { z } from "zod";
+import { z } from "zod";
 import { db } from "@/db";
 import { llmUsage } from "@/db/schema";
 import { HEARTBEAT_MS } from "@/jobs/lease";
@@ -252,6 +253,7 @@ function isSchemaFailure(error: unknown): boolean {
  * and did it answer" is a query and never a rerun.
  */
 export async function generateStructured<T>(call: LlmCall<T>): Promise<T> {
+  if (config().AI_PROVIDER === "cloudflare") return generateCloudflareStructured(call);
   const { OPENROUTER_API_KEY, OPENROUTER_MODEL } = config();
   if (!OPENROUTER_API_KEY) {
     throw new LlmNotConfiguredError();
@@ -302,4 +304,38 @@ export async function generateStructured<T>(call: LlmCall<T>): Promise<T> {
     itemsAnswered: call.itemsAnswered ? call.itemsAnswered(value) : null,
   });
   return value;
+}
+
+async function generateCloudflareStructured<T>(call: LlmCall<T>): Promise<T> {
+  await assertUnderLlmCap();
+  const settings = config();
+  const startedAt = Date.now();
+  const raw = await withCallTimeout((signal) => runCloudflareAi(settings.CLOUDFLARE_TEXT_MODEL, {
+    messages: [{ role: "system", content: call.system }, { role: "user", content: call.prompt }],
+    response_format: { type: "json_schema", json_schema: z.toJSONSchema(call.schema) },
+    max_tokens: 8192,
+  }, signal), call.timeoutMs);
+  const response = z.object({
+    response: z.unknown(),
+    usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }),
+  }).parse(raw);
+  const tokens = response.usage;
+  const costUsd = (tokens.prompt_tokens * settings.CLOUDFLARE_INPUT_USD_PER_MILLION +
+    tokens.completion_tokens * settings.CLOUDFLARE_OUTPUT_USD_PER_MILLION) / 1_000_000;
+  let value: T | undefined;
+  try {
+    value = call.schema.parse(withoutNulCharacters(typeof response.response === "string"
+      ? JSON.parse(response.response) : response.response));
+    return value;
+  } finally {
+    await recordLlmUsage({
+      projectId: call.projectId, purpose: call.purpose,
+      inputTokens: tokens.prompt_tokens, outputTokens: tokens.completion_tokens,
+      costUsd, model: settings.CLOUDFLARE_TEXT_MODEL, provider: "cloudflare",
+      latencyMs: Date.now() - startedAt, schemaFailed: value === undefined,
+      finishReason: value === undefined ? "invalid_output" : "answered",
+      itemsAsked: call.itemsAsked ?? null,
+      itemsAnswered: value !== undefined && call.itemsAnswered ? call.itemsAnswered(value) : null,
+    });
+  }
 }

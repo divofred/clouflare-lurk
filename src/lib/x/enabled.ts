@@ -7,5 +7,5 @@ import { config } from "@/lib/config";
  * else.
  */
 export function xEnabledFor(userId: string | null | undefined): boolean {
-  return config().X_LEADS && Boolean(userId);
+  return config().DATA_PROVIDER !== "apify" && config().X_LEADS && Boolean(userId);
 }

@@ -124,4 +124,25 @@ describeDb("creating a project", () => {
       ["Typeform", "typeform.com", "page"],
     ]);
   });
+  it("creates a complete manual client without reading a website", async () => {
+    const { db } = await import("@/db");
+    const { projects } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { createProjectAndProfileAction } = await import("@/app/app/projects/new/actions");
+    const user = await makeUser();
+    signedIn = { id: user.id };
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ name: "Agency client", solution: "We build small business websites",
+      pain: "Customers cannot find their business online", targetUsers: "Small business owners", geography: "Nigeria" })) {
+      form.set(key, value);
+    }
+    await createProjectAndProfileAction({ error: null }, form);
+    const [project] = await db().select().from(projects).where(eq(projects.userId, user.id));
+    expect(project.url).toBeNull();
+    expect(project.solution).toBe("We build small business websites");
+    expect(project.targetUsers).toBe("Small business owners");
+    expect(generateStructured).not.toHaveBeenCalled();
+    expect(redirect).toHaveBeenCalledTimes(1);
+  });
+
 });

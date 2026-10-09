@@ -61,7 +61,7 @@ function SweepSetup({ lines }: { lines: SetupLine[] }) {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, []);
-  const shown = lines.length > 0 ? lines : [{ text: "Starting", at: now }];
+  const shown = lines.length > 0 ? lines : [{ text: "Waiting for the scan worker", at: now }];
   const total = ABOUT_S.reduce((sum, [, s]) => sum + s, 0) * 1000;
   const left = total - (now - shown[0].at);
   return (
@@ -69,7 +69,7 @@ function SweepSetup({ lines }: { lines: SetupLine[] }) {
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span style={{ fontWeight: 500 }}>Finding your first leads</span>
         <span className="text-small font-mono tabular-nums text-fg-muted">
-          {left > 0 ? `about ${seconds(left)} to go` : "taking longer than usual"}
+          {lines.length === 0 ? "Queued" : left > 0 ? `about ${seconds(left)} to go` : "taking longer than usual"}
         </span>
       </div>
       <ol className="flex flex-col gap-1.5">
@@ -211,5 +211,5 @@ export function FirstSweep({ projectId, first }: { projectId: string; first: Swe
     };
   }, [projectId, ended, gone]);
 
-  return setup ? <SweepSetup lines={lines} /> : <SweepLine projectId={projectId} status={status} />;
+  return setup ? <SweepSetup lines={status.progress === null ? [] : lines} /> : <SweepLine projectId={projectId} status={status} />;
 }

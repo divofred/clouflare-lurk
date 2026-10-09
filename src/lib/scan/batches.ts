@@ -1,3 +1,4 @@
+import { CloudflareAiError } from "@/lib/cloudflareAi";
 import { JevRequestTooLargeError } from "@/lib/jev";
 import { LlmCapReachedError } from "@/lib/llm";
 import { inFlight } from "@/lib/inFlight";
@@ -58,7 +59,7 @@ export async function askInBatches<T, R>(
       // after it would go unanswered too, and the job would end "Finished"
       // having judged nothing (a 2026-09-18 run did). The job fails with the
       // reason instead, and is queued again at its cadence.
-      if (error instanceof LlmCapReachedError) {
+      if (error instanceof LlmCapReachedError || error instanceof CloudflareAiError) {
         throw error;
       }
       // A batch the model never answered is unanswered, never rejected: one

@@ -1,3 +1,6 @@
+import { config } from "./config";
+import { withClerkNetworkRetry } from "./authRetry";
+import { agencyIdentity } from "./agency";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
@@ -19,11 +22,19 @@ export type LocalUser = typeof users.$inferSelect;
  * handler - every call reads afresh.
  */
 export const currentLocalUser = cache(async (): Promise<LocalUser | null> => {
-  const clerkUser = await currentUser();
+  const clerkUser = await withClerkNetworkRetry(() => currentUser());
   if (!clerkUser) {
     return null;
   }
   const primary = clerkUser.primaryEmailAddress;
+  if (config().AGENCY_MODE) {
+    const identity = agencyIdentity({
+      email: primary?.emailAddress ?? null,
+      verified: primary?.verification?.status === "verified",
+    }, config().AGENCY_ALLOWED_EMAILS, config().AGENCY_WORKSPACE_ID);
+    if (!identity) redirect("/access-denied");
+    return localUserFor(identity);
+  }
   return localUserFor({
     clerkUserId: clerkUser.id,
     email: primary?.emailAddress ?? null,

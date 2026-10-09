@@ -262,7 +262,7 @@ export async function labelThreads(input: LabelInput): Promise<ThreadLabel[]> {
     input.candidates,
     input.candidates.length,
     (batch) => askLabels(input, batch),
-    () => [],
+    () => { throw new Error("AI could not evaluate the Google results. Discovery stopped; results remain saved for retry."); },
     (candidate) => stateTokens(threadState(candidate)),
   );
   return keepCitedLabels(

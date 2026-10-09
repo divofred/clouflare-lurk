@@ -421,16 +421,15 @@ describe("labels the model has to cite", () => {
     expect(labels.map((label) => label.id)).toEqual(["a1", "a2", "a3", "a4"]);
   });
 
-  it("leaves a batch the model never answered unlabeled", async () => {
+  it("reports a model failure instead of claiming zero threads were checked", async () => {
     askJev.mockReset();
     askJev.mockRejectedValue(new Error("the connection dropped"));
-    const labels = await labelThreads({
+    await expect(labelThreads({
       projectId: "p1",
       product: PRODUCT,
       destinations: [],
       candidates: [thread("a1", "turning 19 next week")],
-    });
-    expect(labels).toEqual([]);
+    })).rejects.toThrow("AI could not evaluate");
   });
 });
 

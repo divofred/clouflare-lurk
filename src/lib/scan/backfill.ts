@@ -234,6 +234,7 @@ async function walk(
       sources.set(post.id, held);
     }
     landed(fresh);
+    if (result.warning) return "cutShort";
     stale = moved ? 0 : stale + 1;
     const next = result.value.nextCursor ?? undefined;
     if (!next || next === cursor || stale >= STALE_PAGES) {
@@ -293,6 +294,7 @@ class Judge {
   private seen = new Set<string>();
   private running: Promise<void> | null = null;
   private draining = false;
+  private failure: unknown;
   private quiet: ReturnType<typeof setTimeout> | null = null;
   readonly judged: Judgement[] = [];
   readonly leads: LeadRow[] = [];
@@ -330,6 +332,7 @@ class Judge {
       await this.running;
     }
     this.draining = false;
+    if (this.failure) throw this.failure;
   }
 
   private stopQuiet(): void {
@@ -340,7 +343,7 @@ class Judge {
   }
 
   private pump(flush = false): void {
-    if (this.running) {
+    if (this.running || this.failure) {
       return;
     }
     this.stopQuiet();
@@ -356,7 +359,10 @@ class Judge {
     }
     const chunk = this.pending;
     this.pending = [];
-    this.running = this.judge(chunk).finally(() => {
+    this.running = this.judge(chunk).catch((error: unknown) => {
+      this.failure = error;
+      this.stopQuiet();
+    }).finally(() => {
       this.running = null;
       this.pump();
     });
@@ -560,13 +566,15 @@ export async function runBackfill(projectId: string, jobId?: string): Promise<Ba
     );
   }
   const at = new Date();
-  await markCovered(queries.flatMap((query) => query.rows.map((row) => ({ row, at }))));
+  if (cutShort === 0) {
+    await markCovered(queries.flatMap((query) => query.rows.map((row) => ({ row, at }))));
+  }
 
   await progress(
     jobId,
     cutShort === 0
       ? "Finished"
-      : `Finished; ${cutShort} of ${walks} searches stopped early on a Reddit error`,
+      : `Finished; ${cutShort} of ${walks} searches were incomplete; any collected posts were kept`,
   );
   return {
     walks,
@@ -575,4 +583,15 @@ export async function runBackfill(projectId: string, jobId?: string): Promise<Ba
     leads: judge.leads.length,
     cutShort,
   };
+}
+
+/** Score already-stored recovery records without buying any Reddit or Google requests. */
+export async function scoreRecoveredPosts(projectId: string, posts: StoredPost[], runId: string) {
+  const project = await requireScanProject(projectId);
+  const sources = new Map<string, CandidateSource[]>(posts.map((post) => [post.id,
+    [{ kind: "search", key: `apify-run:${runId}`, rows: [] }]]));
+  const judge = new Judge(project, await loadEvaluations(projectId), sources, async () => {});
+  judge.offer(posts);
+  await judge.settle();
+  return { found: posts.length, judged: judge.judged.length, leads: judge.leads.length };
 }

@@ -23,7 +23,9 @@ export const listProjects = cache(async (userId: string): Promise<Project[]> => 
  * count and the insert share a transaction that holds the user's row, so two
  * requests arriving together are counted one after the other, not both at once.
  */
-export async function createProject(userId: string, name: string, url: string | null) {
+export async function createProject(userId: string, name: string, url: string | null,
+  profile: Partial<Pick<typeof projects.$inferInsert, "pain" | "solution" | "targetUsers" | "geography" | "problemPhrasings">> = {},
+) {
   const limits = limitsFor(await tierNameFor(userId), config().SELF_HOSTED);
   return db().transaction(async (tx) => {
     if (limits?.projects != null) {
@@ -36,7 +38,7 @@ export async function createProject(userId: string, name: string, url: string | 
         throw new Error(`This tier allows ${limits.projects} projects. Connect a wallet for more.`);
       }
     }
-    const rows = await tx.insert(projects).values({ userId, name, url }).returning();
+    const rows = await tx.insert(projects).values({ ...profile, userId, name, url }).returning();
     return rows[0];
   });
 }

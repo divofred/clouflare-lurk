@@ -1,3 +1,5 @@
+import { dataforseoSearch } from "@/lib/providers/dataforseo";
+import { config } from "@/lib/config";
 import { randomUUID } from "node:crypto";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -111,6 +113,9 @@ export async function googleSearch(
     timeframe,
     variant: timeframe ? variantOf({ gl: GEO, hl: LANGUAGE }) : "",
     run: async () => {
+      if (config().DATAFORSEO_LOGIN || ctx.funded.provider === "apify") {
+        return dataforseoSearch(query, timeframe);
+      }
       const res = await ctx.funded.client.google.search({
         query,
         gl: GEO,

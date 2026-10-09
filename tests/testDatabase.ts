@@ -26,6 +26,9 @@ export function testDatabaseUrl(env: NodeJS.ProcessEnv): string | undefined {
 
 /** The keys a test must never be able to spend. Every model call is mocked. */
 export const PAID_KEYS = [
+  "APIFY_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "DATAFORSEO_PASSWORD",
   "OPENROUTER_API_KEY",
   "ANYAPI_HOUSE_API_KEY",
   // askJev prefers the Gateway key, so a test that reached the judge would

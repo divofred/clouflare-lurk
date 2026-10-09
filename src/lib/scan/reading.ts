@@ -166,9 +166,9 @@ const SPEAKER_PHRASE: Record<Reading["relationship"], string> = {
  * score is left null, so the existing gates in gates.ts settle the decision
  * from that reading alone and no second set of rules has to agree with them.
  */
-function notAsking(reading: Reading): Assessment {
+function notAsking(reading: Reading, id: string): Assessment {
   return {
-    id: "",
+    id,
     relationship: reading.relationship,
     needState: reading.needState,
     fit: null,
@@ -200,7 +200,7 @@ export function splitByReading(
       toJudge.push(item);
       continue;
     }
-    cut.push(judge({ ...notAsking(reading), id: item.id }, item));
+    cut.push(judge(notAsking(reading, item.id), item));
   }
   return { toJudge, cut };
 }

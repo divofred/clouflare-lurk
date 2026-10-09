@@ -21,22 +21,22 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         Settings
       </h1>
       <SettingsTabs active="general" showX={xEnabledFor(user.id)} project={project} />
-      <WalletPanel
+      {config().DATA_PROVIDER === "anyapi" ? <WalletPanel
         connectedAt={connection?.connectedAt ?? null}
         selfHosted={config().SELF_HOSTED}
-      />
+      /> : <p>Reddit data is supplied through the agency’s Apify account.</p>}
       <SettingsLinkCard
         href={`/app/settings/alerts${query}`}
         icon={Bell}
         title="Alerts"
         sentence="Where each project's new leads land: email, Slack, Discord or a webhook, shared by every platform."
       />
-      <SettingsLinkCard
+      {!config().AGENCY_MODE && <SettingsLinkCard
         href={`/app/settings/api${query}`}
         icon={KeyRound}
         title="API and MCP"
         sentence="Read your projects, leads and spend from a script or an agent."
-      />
+      />}
     </div>
   );
 }

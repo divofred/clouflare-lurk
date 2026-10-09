@@ -281,6 +281,13 @@
       "when": 1790896388069,
       "tag": "0039_drop_dead_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791236652434,
+      "tag": "0040_flawless_makkari",
+      "breakpoints": true
     }
   ]
 }

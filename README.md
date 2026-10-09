@@ -1,5 +1,7 @@
 # lurk
 
+For this fork’s internal agency setup (Apify Reddit, DataForSEO, Cloudflare AI and Workers), see [AGENCY_SETUP.md](AGENCY_SETUP.md). The upstream defaults described below remain available.
+
 <p align="center">
   <img src=".github/banner.png" alt="lurk on a MacBook showing X leads for Cal.com and an iPhone showing Reddit leads. Monitor Reddit and X to find customers, get cited by AI, and rank on Google. Powered by AnyAPI." width="900">
 </p>

@@ -1,3 +1,5 @@
+import { config } from "@/lib/config";
+import { PILOT_SCAN_INTERVAL_MS } from "./pilotSchedule";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { jobs, projects } from "@/db/schema";
@@ -183,6 +185,9 @@ export async function nextRunAt(job: Job): Promise<Date | null> {
     job.kind === "backfill" ||
     job.kind === "discovery_initial" ||
     job.kind === "competitor_scan";
+  if (scanCadence && job.projectId && config().DATA_PROVIDER === "apify") {
+    return new Date(now + PILOT_SCAN_INTERVAL_MS);
+  }
   if (scanCadence && job.projectId) {
     return (await scanCadenceFor(job.projectId)).nextRunAt(new Date(now));
   }

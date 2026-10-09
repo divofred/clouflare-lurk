@@ -1,3 +1,4 @@
+import { askCloudflareJudge } from "./cloudflareJudge";
 import { GatewayError, createGateway } from "@ai-sdk/gateway";
 import { RetryError, experimental_evaluate as evaluate } from "ai";
 import { z } from "zod";
@@ -180,6 +181,7 @@ async function record(
  * before the call moves to OpenRouter.
  */
 export async function askJev(call: JevCall): Promise<Answers> {
+  if (config().AI_PROVIDER === "cloudflare") return askCloudflareJudge(call);
   const { AI_GATEWAY_API_KEY, OPENROUTER_API_KEY } = config();
   if (!AI_GATEWAY_API_KEY && !OPENROUTER_API_KEY) {
     throw new JevNotConfiguredError();

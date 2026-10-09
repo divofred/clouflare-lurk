@@ -1,3 +1,4 @@
+import { config } from "@/lib/config";
 import { headers } from "next/headers";
 import { ActivityPoll } from "@/components/ActivityPoll";
 import { hasWorkInFlight } from "@/lib/projectActivity";
@@ -104,6 +105,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           own horizontal scroll never engaged.
         */}
         <main className="min-w-0 flex-1" style={{ padding: "var(--page-gutter)" }}>
+          {config().DATA_PROVIDER === "apify" && (
+            <p className="mb-5 rounded-control border bg-surface-2 p-3 text-small text-fg-muted">
+              Reddit pilot: automatic scans run daily within your spending limits. Each scan collects a limited sample.
+            </p>
+          )}
           {children}
         </main>
       </div>

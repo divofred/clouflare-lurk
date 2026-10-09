@@ -1,3 +1,4 @@
+import { databaseScope } from "./scope";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { config } from "@/lib/config";
@@ -18,6 +19,14 @@ const holder = globalThis as typeof globalThis & { __lurkDb?: Db };
  * connections go.
  */
 export function db() {
+  const scope = databaseScope.getStore();
+  if (scope) {
+    if (!scope.connection) {
+      const client = postgres(config().DATABASE_URL, { max: 2, prepare: false, idle_timeout: 5 });
+      scope.connection = { db: drizzle(client, { schema }), close: () => client.end({ timeout: 5 }) };
+    }
+    return scope.connection.db;
+  }
   if (!holder.__lurkDb) {
     const sql = postgres(config().DATABASE_URL, { max: 10, idle_timeout: 30 });
     holder.__lurkDb = drizzle(sql, { schema });

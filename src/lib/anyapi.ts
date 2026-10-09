@@ -23,6 +23,7 @@ export type FundedCall<T> = { result: T; requestId: string | null };
  */
 export type FundedClient = {
   client: AnyAPI;
+  provider?: "anyapi" | "apify";
   funding: Funding;
   call: <T>(fn: () => Promise<T>) => Promise<FundedCall<T>>;
 };
@@ -222,6 +223,7 @@ export async function saveWalletTokens(
  * otherwise. `funding` is what a scan writes into search_runs.funded_by.
  */
 export async function clientForUser(userId: string): Promise<FundedClient> {
+  if (config().DATA_PROVIDER === "apify") return houseClient();
   const { ANYAPI_BASE_URL, ANYAPI_HOUSE_API_KEY } = config();
   const walletToken = await walletAccessToken(userId);
   if (walletToken) {
@@ -238,6 +240,15 @@ export async function clientForUser(userId: string): Promise<FundedClient> {
 
 /** The house key's client, for work we owe a user rather than work they asked for. */
 export function houseClient(): FundedClient {
+  if (config().DATA_PROVIDER === "apify") {
+    // Legacy-only features fail closed rather than silently spend an AnyAPI wallet.
+    return {
+      client: new AnyAPI({ apiKey: "disabled", fetch: async () => {
+        throw new Error("This feature is unavailable with Apify. Use manual client setup; X is disabled.");
+      } }),
+      provider: "apify", funding: "house", call: withRequestId,
+    };
+  }
   const { ANYAPI_BASE_URL, ANYAPI_HOUSE_API_KEY } = config();
   if (!ANYAPI_HOUSE_API_KEY) {
     throw new Error("ANYAPI_HOUSE_API_KEY is not set");

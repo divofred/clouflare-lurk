@@ -1,3 +1,4 @@
+import { config } from "@/lib/config";
 import { and, asc, eq, inArray, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { jobs } from "@/db/schema";
@@ -56,12 +57,14 @@ export const ATTENDED_FOR_MS = 24 * 60 * 60 * 1000;
 /**
  * A project is attended when it can alert somebody, or its owner opened the
  * app or called the API inside the window. Without an alert channel a scan
- * nobody reads buys nothing, so it waits for the next visit.
+ * nobody reads buys nothing, so it waits for the next visit. The Apify pilot's
+ * daily scans are explicitly unattended and bypass this gate.
  */
 function attendedOrUnheld(now: Date) {
   const since = new Date(now.getTime() - ATTENDED_FOR_MS).toISOString();
   return sql`(
-    ${notInArray(jobs.kind, ATTENDED_KINDS)}
+    ${config().DATA_PROVIDER === "apify" ? eq(jobs.kind, "scan") : sql`false`}
+    or ${notInArray(jobs.kind, ATTENDED_KINDS)}
     or ${jobs.projectId} is null
     or exists (select 1 from alerts a where a.project_id = ${jobs.projectId})
     or exists (
